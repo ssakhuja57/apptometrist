@@ -1,0 +1,19 @@
+{
+    "update-freq": 10,
+    "routine-file": "/etc/devops/monitor.json",
+    "server": {
+        "address": "localhost",
+        "port": 4567,
+        "secure": false
+    },
+    "frequencies": [
+            {
+                "pattern": ".*sensu.*", 
+                "seconds": null 
+            },
+            {
+                "pattern": ".*",
+                "seconds": 10 
+            }
+    ]
+}

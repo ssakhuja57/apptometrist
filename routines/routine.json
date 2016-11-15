@@ -1,0 +1,23 @@
+{
+    "name": "example-routine",
+    "tasks": [
+        {
+            "name": "get-index",
+            "description": "GET the root page",
+            "request": {
+                "method": "GET",
+                "uri": "/"
+            },
+            "response": {
+                "expected-status": "200-299"
+            }
+        },
+        {
+            "task-type": "docker_exec",
+            "host-index": 1,
+            "name": "list-home",
+            "description": "list the contents of the home dir",
+            "command": "ls -la"
+        }
+    ]
+}
