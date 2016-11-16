@@ -114,7 +114,6 @@ def update():
 
 def delete_client(name):
 
-    log('deleting client: ' + name)
     resp = server_conn.request('DELETE', '/clients/' + name)
 
 def add_client(name):
