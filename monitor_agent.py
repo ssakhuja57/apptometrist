@@ -35,7 +35,7 @@ the below check needs to be configured on the sensu server:
 # helpers
 
 def log(msg):
-    print(msg)
+    print(threading.current_thread().name + ': ' + msg)
 
 def debug(msg):
     if DEBUG:
@@ -85,7 +85,7 @@ def update():
 
     for container in containers:
         name = get_container_name(container)
-        debug('getting configured check freq for: ' + name)
+        #debug('getting configured check freq for: ' + name)
         freq = get_check_freq(name)
         if not freq:
             debug('frequency for container ' + name + ' is null, skipping')
@@ -166,7 +166,7 @@ def run_check(container_obj):
         return 1
 
     host_cfg = get_host_cfg(container_obj)
-    host = routine_runner.Host(host_cfg)
+    host = routine_runner.HostSet(host_cfg)
     routine = routine_runner.Routine(json.load(open(routine_file)))
 
     
