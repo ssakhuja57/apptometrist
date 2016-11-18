@@ -10,6 +10,7 @@ from docker import client
 import re
 import socket
 import threading
+import traceback
 
 # config
 DEBUG = True
@@ -17,19 +18,6 @@ CFG_FILE = 'config.json'
 ROUTINES = 'routines/'
 DEFAULT_PORT = 8080
 CHECK_NAME = 'monitor'
-
-'''
-the below check needs to be configured on the sensu server:
-
-  "checks": {
-    "monitor": {
-      "command": "",
-      "standalone": true,
-      "publish": false
-    }
-  }
-'''
-
 
 
 # helpers
@@ -77,44 +65,61 @@ def update():
 
     debug('updating server with current container list state')
 
-    containers = CLI.containers()
-    container_names = [ get_container_name(c) for c in containers ]
+    try:
+        # get updated list of containers running on this host
+        containers = CLI.containers()
+        container_names = [ get_container_name(c) for c in containers ]
 
-    clients = json.loads(server_conn.request('GET', '/clients').read())
-    client_names = [ client['name'] for client in clients ]
+        # get updated list of clients configured on the server that were created from this host
+        all_clients = json.loads(server_conn.request('GET', '/clients').read())
+        clients = [ client for client in all_clients if client['address'] == HOSTNAME ]
+        client_names = [ client['name'] for client in clients ]
 
-    for container in containers:
-        name = get_container_name(container)
-        #debug('getting configured check freq for: ' + name)
-        freq = get_check_freq(name)
-        if not freq:
-            debug('frequency for container ' + name + ' is null, skipping')
-            continue
-        # add clients that don't exist on the server
-        if name not in client_names:
-            log('new container found: ' + name)
-            log('posting client ' + name + ' to server')
-            add_client(name)
-        # add check timers that don't exist
-        if name not in CHECK_TIMERS:
-            log('creating check timer for ' + name + ' with freq: ' + str(freq))
-            create_check_timer(container, freq)
-            
+        for container in containers:
+            name = get_container_name(container)
+            #debug('getting configured check freq for: ' + name)
+            freq = get_check_freq(name)
+            if not freq:
+                debug('frequency for container ' + name + ' is null, skipping')
+                continue
+            # add clients that don't exist on the server
+            if name not in client_names:
+                log('new container found: ' + name)
+                log('posting client ' + name + ' to server')
+                add_client(name)
+            # add check timers that don't exist
+            if name not in CHECK_TIMERS:
+                log('creating check timer for ' + name + ' with freq: ' + str(freq))
+                create_check_timer(container, freq)
+                
 
-    # delete clients that don't exist locally
-    for client in clients:
-        if client['address'] == HOSTNAME:
-            client_name = client['name']
-            if client_name not in container_names:
-                log('container for client ' + client_name + ' no longer exists')
-                log('deleting client')
-                delete_client(client_name)
-                log('canceling check timer for container: ' + client_name)
-                CHECK_TIMERS.pop(client_name).shutdown()
+        # delete clients that don't exist locally
+        for client in clients:
+            if client['address'] == HOSTNAME:
+                client_name = client['name']
+                if client_name not in container_names:
+                    log('container for client ' + client_name + ' no longer exists')
+                    log('deleting client')
+                    delete_client(client_name)
+                    log('canceling check timer for container: ' + client_name)
+                    CHECK_TIMERS.pop(client_name).shutdown()
+
+        # unpause all check timers in case any were paused
+        for name,timer in CHECK_TIMERS.items():
+            timer.paused = False
+
+    except:
+        traceback.print_exc()
+        log('error in syncing containers running on this host with clients defined in server, pausing all check timer threads until resolved')
+        # pause all check timers
+        for name,timer in CHECK_TIMERS.items():
+            timer.paused = True
+        return 1
 
 def delete_client(name):
 
     resp = server_conn.request('DELETE', '/clients/' + name)
+    debug('response: ' + str(resp.status))
 
 def add_client(name):
 
@@ -125,18 +130,24 @@ def add_client(name):
         'environment': ENV
         }
 
-    server_conn.request('POST', '/clients', data=json.dumps(data))
+    resp = server_conn.request('POST', '/clients', data=json.dumps(data))
+    debug('response: ' + str(resp.status))
 
-def send_check_result(container_obj, routine_result):
+def send_check_result(container_obj, routine_result, warn=None):
 
-    output = 'OK'
-    status = 0
-    if routine_result['tasks-failed'] != 0:
-        output = json.dumps([ res for res in routine_result['task-results'] if res['result'] not in ('SUCCESS', 'SKIPPED')])
-        status = 2
+    if warn:
+        output = warn
+        status = 1
+    else:
+        output = 'OK'
+        status = 0
+        if routine_result['tasks-failed'] != 0:
+            output = json.dumps([ res for res in routine_result['task-results'] if res['result'] not in ('SUCCESS', 'SKIPPED')])
+            status = 2
 
+    name = get_container_name(container_obj)
     body = {
-        'source': get_container_name(container_obj),
+        'source': name,
         'name': CHECK_NAME,
         'output': output,
         'status': status
@@ -144,37 +155,41 @@ def send_check_result(container_obj, routine_result):
 
     debug('sending ' + json.dumps(body))
     resp = server_conn.request('POST', '/results', data=json.dumps(body))
-    debug(str(resp.status))
+    debug('response: ' + str(resp.status))
     if resp.status > 299:
-        log(resp.read())
+        log('error returned when trying to post check result for ' + name + ':' + resp.read())
 
-def run_check2(container_obj):
+def run_check_fake(container_obj):
 
     send_check_result(container_obj, {'tasks-failed': 1, 'task-results': [{'blah': 'blah', 'result': 'blue'}]})
 
 def run_check(container_obj):
 
-    name = get_container_name(container_obj)
-    container_routine_file = CFG['routine-file']
-    routine_file = ROUTINES + name + '.json'
-    debug('copying ' + container_routine_file + ' from container ' + name + ' to ' + routine_file)
-    cmd = 'docker cp ' + name + ':' + container_routine_file + ' ' + routine_file
-    debug('running cmd: ' + cmd)
-    cp = ss_utils.run_cmd(cmd)
-    if cp != 0:
-        log('unable to find ' + container_routine_file + ' for ' + name)
-        return 1
+    try:
+        name = get_container_name(container_obj)
+        container_routine_file = CFG['routine-file']
+        routine_file = ROUTINES + name + '.json'
+        debug('copying ' + container_routine_file + ' from container ' + name + ' to ' + routine_file)
+        cmd = 'docker cp ' + name + ':' + container_routine_file + ' ' + routine_file
+        debug('running cmd: ' + cmd)
+        cp = ss_utils.run_cmd(cmd.strip())
+        if cp[0] != 0:
+            log('unable to find ' + container_routine_file + ' for ' + name)
+            send_check_result(container_obj, None, warn='unable to find ' + container_routine_file)
+            return 1
 
-    host_cfg = get_host_cfg(container_obj)
-    host = routine_runner.HostSet(host_cfg)
-    routine = routine_runner.Routine(json.load(open(routine_file)))
-
+        host_cfg = get_host_cfg(container_obj)
+        host = routine_runner.HostSet(host_cfg)
+        routine = routine_runner.Routine(json.load(open(routine_file)))
     
-    runner = routine_runner.Runner(routine, host)
+        runner = routine_runner.Runner(routine, host)
 
-    res = runner.run()
+        res = runner.run()
 
-    send_check_result(container_obj, res)
+        send_check_result(container_obj, res)
+    except:
+        traceback.print_exc()
+        return 1
     
 def create_check_timer(container_obj, freq):
 
