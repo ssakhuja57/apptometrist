@@ -201,8 +201,9 @@ def create_check_timer(container_obj, freq):
 
 if __name__ == '__main__':
 
-    CFG = json.load(open('config.json'))
-    HOSTNAME = socket.gethostname()
+    log('loading agent config ' + CFG_FILE)
+    CFG = ss_utils.load_json_template(CFG_FILE, os.environ)
+    HOSTNAME = CFG['hostname']
     ENV = os.environ.get('HOST_ENV', 'dev')
     CLI = client.Client(base_url='unix://var/run/docker.sock')
     CHECK_TIMERS = {}

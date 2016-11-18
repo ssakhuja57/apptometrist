@@ -1,7 +1,7 @@
 import httplib
 import ssl
 import json
-from subprocess import Popen, PIPE
+import subprocess
 import time
 import datetime
 import threading
@@ -60,9 +60,9 @@ class TaskTimer(threading.Thread):
 
 def run_cmd(cmd, get_output=False):
     cmd_list = cmd.split(' ')
-    stdout = PIPE if get_output else None
-    stderr = PIPE if get_output else None
-    p = Popen(cmd_list, stdout=stdout, stderr=stderr)
+    stdout = subprocess.PIPE if get_output else None
+    stderr = subprocess.PIPE if get_output else None
+    p = subprocess.Popen(cmd_list, stdout=stdout, stderr=stderr)
     if get_output:
         output = p.communicate()
     else:
@@ -105,3 +105,10 @@ def get_time_diff(t1, t2):
 def get_rand_string(base_name='user'):
     return base_name + Time.get_current_time_numeric()
 
+def load_json_template(path, key_vals):
+
+    f = open(path)
+    string = f.read()
+    f.close()
+    resolved = string % key_vals
+    return json.loads(resolved)
