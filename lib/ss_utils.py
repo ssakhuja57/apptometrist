@@ -5,6 +5,7 @@ import subprocess
 import time
 import datetime
 import threading
+import csv
 
 class RestHelper(object):
 
@@ -57,9 +58,8 @@ class TaskTimer(threading.Thread):
             self._finished.wait(self._interval)
 
 # shell
-
 def run_cmd(cmd, get_output=False):
-    cmd_list = cmd.split(' ')
+    cmd_list = list(csv.reader([cmd], delimiter=' ', quotechar="'", quoting=csv.QUOTE_ALL))[0]
     stdout = subprocess.PIPE if get_output else None
     stderr = subprocess.PIPE if get_output else None
     p = subprocess.Popen(cmd_list, stdout=stdout, stderr=stderr)

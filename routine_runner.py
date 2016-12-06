@@ -29,6 +29,9 @@ def log_obj(obj, lvl=1):
     log(obj.__class__.__name__ + ' object created as:')
     log(vars(obj), lvl=lvl, obj=True)
 
+def find_file(name_pattern, dir_path):
+    return [ f for f in os.listdir(dir_path) if re.match(pattern, f) ]
+
 #def results_to_html(results):
 #    res_cp = copy.deepcopy(results)
 #    for result in res_cp['task-results']:
@@ -85,7 +88,7 @@ class Task(object):
 
 # task implementations
 
-class docker_exec(Task):
+class execute(Task):
 
     output_streams = {
         'stdout': 0,
@@ -128,6 +131,45 @@ class docker_exec(Task):
         else:
             stream = self.output_streams[self.output_stream]
             return TaskResult(TaskResult.UNCLASSIFIED_ERROR, res[1][stream]) # res[1][0] for stdout, res[1][1] for stderr
+
+class plugin(Task):
+
+    PLUGINS_DIR = '/usr/local/nagios-plugins/'
+
+    def __init__(self, cfg):
+        Task.__init__(self, cfg)
+
+        self.plugin_name = cfg['plugin-name']
+        self.args = cfg.get('args', {})
+
+        log_obj(self)
+
+    @property
+    def required_fields(self):
+        return ['plugin-name']
+
+    def run(self, host, runtime):
+        log('preparing to run task: ' + self.name)
+
+        files = find_file('^.*/' + self.plugin_name + '\..+$', self.PLUGINS_DIR)
+        if len(files) < 1:
+            raise ValueError('unable to find plugin ' + self.plugin_name + ' in ' + self.PLUGINS_DIR)
+        cmd = files[0]
+        for k,v in self.args.items():
+            cmd += ' ' + k + ' ' + str(v)
+
+        log('running command: ' + cmd)
+        
+        self.start()
+        res = ss_utils.run_cmd(cmd, get_output=True)
+        self.end()
+
+        ret = res[0]
+        if ret == 0:
+            return TaskResult(TaskResult.SUCCESS, 'OK')
+        else:
+            return TaskResult(TaskResult.UNCLASSIFIED_ERROR, res[1][0]) # stdout
+
 
 class http(Task):
     def __init__(self, cfg): 
