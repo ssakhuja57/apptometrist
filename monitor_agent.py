@@ -119,16 +119,16 @@ def update():
                     CHECK_TIMERS.pop(client_name).shutdown()
 
         # unpause all check timers in case any were paused
-        for name,timer in CHECK_TIMERS.items():
-            timer.paused = False
+        #for name,timer in CHECK_TIMERS.items():
+        #    timer.paused = False
 
     except:
         traceback.print_exc()
-        log('error in syncing containers running on this host with clients defined in server, pausing all check timer threads until resolved')
+        log('error in syncing containers running on this host with clients defined in server')
+        #log('pausing all check timer threads until resolved')
         # pause all check timers
-        for name,timer in CHECK_TIMERS.items():
-            timer.paused = True
-        return 1
+        #for name,timer in CHECK_TIMERS.items():
+        #    timer.paused = True
 
 def delete_client(name):
 
