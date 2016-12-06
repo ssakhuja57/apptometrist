@@ -32,13 +32,13 @@ def debug(msg):
 def get_container_name(container_obj):
     return container_obj['Names'][0][1:]
 
-def get_host_cfg(container_obj):
+def get_host(container_obj):
 
     name = get_container_name(container_obj)
     inspect = CLI.inspect_container(container_obj)
     ip = inspect['NetworkSettings']['IPAddress']
 
-    host = {
+    cfg = {
             'name': name,
             'hosts': [
                 {
@@ -50,7 +50,18 @@ def get_host_cfg(container_obj):
             ]
             }
 
-    return host
+    return routine_runner.HostSet(cfg)
+
+def get_routine(tasks_file):
+    cfg = {
+        'name': 'monitor',
+        'tasks': tasks
+        }
+
+    return routine_runner.Routine(json.load(open(tasks_file)))
+
+def run_routine(routine, host):
+    return routine_runner.Runner(routine, host).run()
 
 def get_check_freq(container_name):
 
@@ -178,13 +189,10 @@ def run_check(container_obj):
             send_check_result(container_obj, None, warn='unable to find ' + container_routine_file)
             return 1
 
-        host_cfg = get_host_cfg(container_obj)
-        host = routine_runner.HostSet(host_cfg)
-        routine = routine_runner.Routine(json.load(open(routine_file)))
+        host = get_host(container_obj)
+        routine = get_routine(routine_file)
     
-        runner = routine_runner.Runner(routine, host)
-
-        res = runner.run()
+        res = run_routine(routine, host)
 
         send_check_result(container_obj, res)
     except:

@@ -290,10 +290,10 @@ class Routine(object):
         self.tasks = []
         log('-- creating routine: ' + self.name)
         for task in cfg['tasks']:
-            task_type = task.get('task-type', DEFAULT_TASK_TYPE)
+            task_type = task.get('type', DEFAULT_TASK_TYPE)
             task_class = get_task(task_type)
             if task_class is None:
-                raise ValueError('unrecognized task-type: ' + task_type)
+                raise ValueError('unrecognized task type: ' + task_type)
             try:
                 task_obj = task_class(task)
                 self.tasks.append(task_obj)
