@@ -15,7 +15,7 @@ import traceback
 # config
 DEBUG = True
 CFG_FILE = 'config.json'
-ROUTINES = 'routines/'
+ROUTINES = 'routines_tmp/'
 DEFAULT_PORT = 8080
 CHECK_NAME = 'monitor'
 
@@ -53,12 +53,15 @@ def get_host(container_obj):
     return routine_runner.HostSet(cfg)
 
 def get_routine(tasks_file):
+    with open(tasks_file) as f:
+        tasks = json.load(f)
+        f.close()
     cfg = {
         'name': 'monitor',
         'tasks': tasks
         }
 
-    return routine_runner.Routine(json.load(open(tasks_file)))
+    return routine_runner.Routine(cfg)
 
 def run_routine(routine, host):
     return routine_runner.Runner(routine, host).run()
@@ -214,6 +217,9 @@ if __name__ == '__main__':
     HOSTNAME = CFG['hostname']
     ENV = os.environ.get('HOST_ENV', 'dev')
     CLI = client.Client(base_url='unix://var/run/docker.sock')
+    if not os.path.exists(ROUTINES):
+        log('creating dir: ' + ROUTINES)
+        os.mkdir(ROUTINES)
     CHECK_TIMERS = {}
 
     server_params = CFG['server']
