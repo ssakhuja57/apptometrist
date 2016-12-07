@@ -1,5 +1,4 @@
 {
-    "hostname": "%(HOST_NAME)s",
     "update-freq": 10,
     "routine-file": "/etc/devops/monitor.json",
     "server": {
@@ -9,7 +8,7 @@
     },
     "frequencies": [
             {
-                "pattern": "monitor-agent",
+                "pattern": "monitor-agent.*",
                 "seconds": null
             },
             {

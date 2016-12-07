@@ -212,11 +212,14 @@ def create_check_timer(container_obj, freq):
 
 if __name__ == '__main__':
 
-    log('loading agent config ' + CFG_FILE)
-    CFG = ss_utils.load_json_template(CFG_FILE, os.environ)
-    HOSTNAME = CFG['hostname']
-    ENV = os.environ.get('HOST_ENV', 'dev')
+    log('connecting to docker daemon')
     CLI = client.Client(base_url='unix://var/run/docker.sock')
+
+    log('loading/resolving agent config ' + CFG_FILE)
+
+    CFG = ss_utils.load_json_template(CFG_FILE, os.environ)
+    HOSTNAME = CLI.info()['Name']
+    ENV = os.environ.get('HOST_ENV', 'dev')
     if not os.path.exists(ROUTINES):
         log('creating dir: ' + ROUTINES)
         os.mkdir(ROUTINES)
